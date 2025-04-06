@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Virtual Wind Tunnel: Aero-Mechanical Simulation</title>
+  <style>
+    /* Basic styling for the simulation page */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #f0f0f0;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      text-align: center;
+      padding: 20px;
+    }
+    #controls {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .control {
+      margin: 10px;
+    }
+    .control label {
+      margin-right: 10px;
+    }
+    #results {
+      margin: 10px 0;
+      font-size: 1.1em;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      background-color: #fff;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Virtual Wind Tunnel</h1>
+    <p>A simplified 2D simulation of airflow around an airfoil. Adjust the parameters below to explore aerodynamic forces.</p>
+  </header>
+
+  <section id="controls">
+    <div class="control">
+      <label for="angleSlider">Angle of Attack (°): </label>
+      <input type="range" id="angleSlider" min="-10" max="15" step="0.1" value="5" oninput="updateControls()">
+      <span id="angleValue">5</span>
+    </div>
+    <div class="control">
+      <label for="velocitySlider">Free-Stream Velocity (m/s): </label>
+      <input type="range" id="velocitySlider" min="10" max="100" step="1" value="50" oninput="updateControls()">
+      <span id="velocityValue">50</span>
+    </div>
+    <div class="control">
+      <label for="chordSlider">Chord Length (m): </label>
+      <input type="range" id="chordSlider" min="0.5" max="3" step="0.1" value="1.5" oninput="updateControls()">
+      <span id="chordValue">1.5</span>
+    </div>
+  </section>
+
+  <section id="results">
+    <p>Calculated Lift Coefficient (C<sub>L</sub>): <span id="liftCoeff">0</span></p>
+    <p>Estimated Lift Force (N): <span id="liftForce">0</span></p>
+  </section>
+
+  <canvas id="simulationCanvas" width="800" height="400">
+    Your browser does not support the canvas element.
+  </canvas>
+
+  <script>
+    // Get DOM elements
+    const angleSlider = document.getElementById("angleSlider");
+    const velocitySlider = document.getElementById("velocitySlider");
+    const chordSlider = document.getElementById("chordSlider");
+    const angleValue = document.getElementById("angleValue");
+    const velocityValue = document.getElementById("velocityValue");
+    const chordValue = document.getElementById("chordValue");
+    const liftCoeffDisplay = document.getElementById("liftCoeff");
+    const liftForceDisplay = document.getElementById("liftForce");
+    const canvas = document.getElementById("simulationCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Global simulation parameters
+    let particles = [];
+    const numParticles = 200; // number of streamline particles
+    const airDensity = 1.225; // kg/m³ (sea level standard)
+
+    // Initialize particles representing airflow streamlines
+    function initParticles() {
+      particles = [];
+      for (let i = 0; i < numParticles; i++) {
+        particles.push({
+          x: Math.random() * 50,  // start near the left (inlet)
+          y: Math.random() * canvas.height
+        });
+      }
+    }
+
+    // Update control readouts and recalculate aerodynamic properties
+    function updateControls() {
+      const angle = parseFloat(angleSlider.value);
+      const velocity = parseFloat(velocitySlider.value);
+      const chord = parseFloat(chordSlider.value);
+
+      angleValue.textContent = angle;
+      velocityValue.textContent = velocity;
+      chordValue.textContent = chord;
+
+      // Calculate lift coefficient using thin airfoil theory (for small angles, in radians)
+      const alphaRad = angle * Math.PI / 180;
+      const liftCoeff = 2 * Math.PI * alphaRad;
+      liftCoeffDisplay.textContent = liftCoeff.toFixed(3);
+
+      // Estimate lift force: L = 0.5 * ρ * V² * S * C_L
+      // Approximate wing area S = chord * span (assume span = 5 m for demo)
+      const span = 5;
+      const area = chord * span;
+      const liftForce = 0.5 * airDensity * velocity * velocity * area * liftCoeff;
+      liftForceDisplay.textContent = liftForce.toFixed(1);
+    }
+
+    // Draw the airfoil as a simple ellipse and rotate based on angle of attack
+    function drawAirfoil(angle) {
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(angle * Math.PI / 180);
+      ctx.fillStyle = "#666";
+      ctx.beginPath();
+      const chord = parseFloat(chordSlider.value) * 100; // scale for visualization
+      const thickness = chord * 0.15;
+      ctx.ellipse(0, 0, chord / 2, thickness / 2, 0, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Update particles to simulate airflow (simple linear advection)
+    function updateParticles(velocity, angle) {
+      const dt = 0.5; // time step for particle motion
+      const vx = velocity * Math.cos(angle * Math.PI / 180);
+      const vy = velocity * Math.sin(angle * Math.PI / 180);
+
+      for (let p of particles) {
+        p.x += vx * dt * 0.5; // scale down speed for visualization
+        p.y += vy * dt * 0.5;
+        // Wrap around if particle goes off the right edge
+        if (p.x > canvas.width) {
+          p.x = 0;
+          p.y = Math.random() * canvas.height;
+        }
+      }
+    }
+
+    // Draw particles as small dots
+    function drawParticles() {
+      ctx.fillStyle = "rgba(0, 150, 255, 0.7)";
+      for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+
+    // Optional: draw a grid to provide spatial context
+    function drawGrid() {
+      ctx.strokeStyle = "#eee";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 50) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+    }
+
+    // Main animation loop
+    function animate() {
+      const angle = parseFloat(angleSlider.value);
+      const velocity = parseFloat(velocitySlider.value);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      drawAirfoil(angle);
+      updateParticles(velocity, angle);
+      drawParticles();
+      updateControls();
+      requestAnimationFrame(animate);
+    }
+
+    // Initialize and start simulation
+    initParticles();
+    updateControls();
+    animate();
+  </script>
+</body>
+</html>
